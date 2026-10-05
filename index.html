@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>plane-vtp-target-field — VTP simulation with a static target lattice and an oscillating target</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<nav class="tabs">
+  <button data-view="about" class="active">about</button>
+  <button data-view="sim">live simulation</button>
+  <button data-view="matlab">matlab version</button>
+</nav>
+
+<main>
+
+  <!-- ================= ABOUT ================= -->
+  <section id="view-about" class="view active">
+    <h1 class="page-title">plane-vtp-target-field (Voronoi Topological Perception)</h1>
+    <p class="lede">The VTP agent model on the plane with a lattice of static targets across the whole plane and one oscillating target whose frequency you choose, ported from MATLAB to a dependency-free browser build.</p>
+
+    <div class="badge-row">
+      <span class="badge">Voronoi Topological Perception</span>
+      <span class="badge">Delaunay-neighbor repulsion + alignment + homing</span>
+      <span class="badge">Voronoi-cell speed governor</span>
+      <span class="badge">static target lattice + 1 oscillating target</span>
+      <span class="badge">MATLAB + JS ports</span>
+      <span class="badge">no build step</span>
+    </div>
+
+    <div class="prose">
+      <h2>The agent model</h2>
+      <p>Every agent reacts to its <strong>topological</strong> neighborhood: the agents it shares an edge with in the Delaunay triangulation (equivalently, the agents whose Voronoi cells touch its own). Each step an agent's desired direction is a blend of three terms:</p>
+      <ul>
+        <li><strong>Repulsion</strong> from its nearest Delaunay neighbor, with magnitude <em>s</em> = transition(distance / L) that is 1 when the two are touching and fades smoothly to exactly 0 at distance L.</li>
+        <li><strong>Alignment</strong> with its Delaunay neighbors, weighted by <strong>&nu;</strong>. Neighbors whose heading already agrees with the agent's count for more.</li>
+        <li><strong>Homing</strong> toward the nearest target, with magnitude 1 &minus; <em>s</em>, so repulsion takes priority when an agent is crowded.</li>
+      </ul>
+      <p>The agent then moves along that direction at a speed of tanh(l / L), where <em>l</em> is the distance from the agent to the boundary of its own Voronoi cell along its direction of motion. Crowded agents (small cells) slow down; agents on the edge of the group have an unbounded cell and move at full speed.</p>
+
+      <h2>The target field</h2>
+      <p>The targets are all <em>point</em> targets, and every agent homes toward whichever one is currently nearest to it:</p>
+      <ul>
+        <li><strong>Static targets</strong> form a square lattice that covers the plane over [&minus;H, H]&sup2;, with one target every <strong>spacing</strong> units. Both H and the spacing are adjustable live.</li>
+        <li><strong>One oscillating target</strong> swings back and forth along a line through a chosen center, at an amplitude and direction you choose and at a <strong>frequency you choose</strong>, in cycles per time step (period = 1 / frequency steps):
+          <div class="formula">position(t) = center + amplitude &middot; sin(2&pi; &middot; frequency &middot; t) &middot; (cos&nbsp;angle, sin&nbsp;angle)</div>
+          Setting the frequency to 0 freezes the target at its center.</li>
+      </ul>
+      <p>Because agents choose the nearest target, the oscillating target mostly pulls in agents that are closer to it than to any lattice point. Raising the lattice spacing or the swing amplitude gives it a larger catchment area.</p>
+
+      <h2>Two implementations, one model</h2>
+      <ul>
+        <li><code>index.html</code> (this page, <em>live simulation</em> tab) is a plain JavaScript/Canvas port that runs directly in the browser. It needs no install and no external libraries, and it includes its own small Delaunay triangulation.</li>
+        <li><code>matlab/dynamics.m</code> is the MATLAB implementation, browsable under the <em>matlab version</em> tab.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= LIVE SIMULATION ================= -->
+  <section id="view-sim" class="view">
+    <h1 class="page-title">Live simulation</h1>
+    <p class="lede">Runs entirely in your browser: plain Canvas, no server, no build step, no external libraries.</p>
+
+    <div class="sim-frame">
+      <div class="sim-topbar">
+        <span><b>VTP &mdash; Target Field</b> &nbsp;|&nbsp; ported from MATLAB (dynamics.m)</span>
+        <label class="targets-picker">agents N:
+          <select id="numAgents">
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="400" selected>400</option>
+            <option value="600">600</option>
+            <option value="800">800</option>
+          </select>
+        </label>
+      </div>
+      <div class="sim-status" id="statusLine">t = 1</div>
+      <div class="sim-canvas-wrap"><canvas id="simCanvas"></canvas></div>
+
+      <div class="controls">
+        <div class="global-row">
+          <span class="label">Run</span>
+          <div class="ctrl">Steps / frame:
+            <input type="range" id="spfSlider" min="1" max="8" step="1" value="1" />
+            <span class="readout" id="spfVal">1</span>
+          </div>
+          <label class="ctrl"><input type="checkbox" id="followCb" checked /> follow swarm</label>
+          <label class="ctrl"><input type="checkbox" id="headingsCb" checked /> show headings</label>
+          <div class="buttons">
+            <button id="btnPause">Pause</button>
+            <button id="btnReset" class="primary">Reset</button>
+            <button id="btnRandom">New random run</button>
+          </div>
+        </div>
+        <div class="global-row">
+          <span class="label">Dynamics</span>
+          <div class="ctrl">&nu; (alignment):
+            <input type="range" id="nuSlider" min="0" max="8" step="0.05" value="2.5" />
+            <span class="readout" id="nuVal">2.50</span>
+          </div>
+        </div>
+        <div class="global-row">
+          <span class="label">Static targets</span>
+          <div class="ctrl">Spacing:
+            <input type="range" id="spacingSlider" min="2" max="20" step="0.5" value="5" />
+            <span class="readout" id="spacingVal">5.0</span>
+          </div>
+          <div class="ctrl">Half-width H:
+            <input type="range" id="halfSlider" min="5" max="40" step="1" value="20" />
+            <span class="readout" id="halfVal">20</span>
+          </div>
+          <span class="ctrl" id="staticCount"></span>
+        </div>
+        <div class="target-rows">
+          <div class="target-row">
+            <span class="tname" style="color:#f2685f">Osc.</span>
+            <div class="ctrl">Frequency:
+              <input type="range" id="freqSlider" min="0" max="0.1" step="0.0005" value="0.01" />
+              <input type="number" id="freqNum" class="numbox" min="0" max="1" step="0.001" value="0.01" />
+              <span class="readout wide" id="freqInfo"></span>
+            </div>
+            <div class="ctrl">Amplitude:
+              <input type="range" id="ampSlider" min="0" max="25" step="0.5" value="8" />
+              <span class="readout" id="ampVal">8.0</span>
+            </div>
+            <div class="ctrl">Angle:
+              <input type="range" id="angSlider" min="0" max="180" step="1" value="90" />
+              <span class="readout" id="angVal">90&deg;</span>
+            </div>
+            <div class="ctrl">Center x:
+              <input type="range" id="cxSlider" min="-20" max="20" step="0.5" value="0" />
+              <span class="readout" id="cxVal">0.0</span>
+            </div>
+            <div class="ctrl">Center y:
+              <input type="range" id="cySlider" min="-20" max="20" step="0.5" value="0" />
+              <span class="readout" id="cyVal">0.0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MATLAB VERSION ================= -->
+  <section id="view-matlab" class="view">
+    <h1 class="page-title">MATLAB version</h1>
+    <p class="lede">The MATLAB implementation, in <code>matlab/</code>.</p>
+
+    <div class="prose">
+      <p>Requires MATLAB with the base product plus the functions it already uses for geometry (<code>delaunayTriangulation</code>, <code>voronoiDiagram</code>, <code>polyxpoly</code>, <code>polyshape</code>). Run:</p>
+      <div class="formula">cd matlab<br />matlab -r dynamics</div>
+      <p>...or open <code>dynamics.m</code> in the MATLAB editor and run it. All the target-field settings are at the top of the file:</p>
+      <div class="formula"><span class="k">grid_half</span>, <span class="k">grid_spacing</span>   % static lattice window and spacing<br /><span class="k">osc_freq</span>                       % oscillation frequency, cycles per time step<br /><span class="k">osc_amp</span>, <span class="k">osc_center</span>, <span class="k">osc_angle</span>   % swing amplitude, center, direction</div>
+      <p><code>osc_freq</code> is the frequency you choose. The static lattice is plotted as grey squares and the oscillating target as a red dot.</p>
+      <p>The folder holds <code>dynamics.m</code> and the files it depends on: <code>Target.m</code> and <code>nearestOnSegment.m</code> (target geometry and homing vectors), <code>neighborhoods.m</code> (Delaunay neighbors and the nearest neighbor), <code>transition.m</code> (the smooth cutoff function), <code>alignTo.m</code> (alignment), <code>voronoiProjectToBoundary.m</code> (distance to the Voronoi cell boundary, used for the speed governor), and <code>voronoiForwardArea.m</code> with <code>poly_area.m</code> (only needed if you switch <code>fdim</code> to 2).</p>
+    </div>
+
+    <div class="file-layout">
+      <div class="file-list" id="fileList"></div>
+      <div>
+        <div class="code-view" id="codeView">Select a file…</div>
+        <p class="file-hint" id="fileHint"></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>plane-vtp-target-field (Voronoi Topological Perception) — MATLAB → browser port · view source on <a href="https://github.com/" target="_blank">GitHub</a></footer>
+
+<script src="assets/sim.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
